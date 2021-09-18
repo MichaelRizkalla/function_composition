@@ -36,7 +36,7 @@ void test_function_composition() {
     auto my_data = std::vector< std::pair< double, double > > { { 3, 1 }, { 5, 1 }, { 7, 1 }, { 8, 1 } };
     EXPECTED_RESULT(double, 4, 6, 26, 54, 71)
 
-    auto F = fp::CompositionFunction< decltype(add) > { add }.Compose(square).Compose(subtract_ten);
+    auto F = fp::CompositionFunction { add }.Compose(square).Compose(subtract_ten);
 
     CHECK_RESULT(my_data, F);
 }
@@ -50,7 +50,7 @@ void test_lambda_composition() {
     auto my_data = std::vector< int > { 3, 5, 7, 8 };
     EXPECTED_RESULT(double, 4, 6, 26, 54, 71);
 
-    auto F = fp::CompositionFunction< decltype(lambda_add_one) > { lambda_add_one }.Compose(lambda_int_to_double).Compose(lambda_square).Compose(lambda_subtract_ten);
+    auto F = fp::CompositionFunction { lambda_add_one }.Compose(lambda_int_to_double).Compose(lambda_square).Compose(lambda_subtract_ten);
 
     CHECK_RESULT(my_data, F);
 }
@@ -108,7 +108,7 @@ void test_combination() {
     auto my_data = std::vector< Ingredient > { { IngredientType::Flour }, { IngredientType::Salad }, { IngredientType::Meat } };
     EXPECTED_RESULT(int, 3, 150, 50, 150);
 
-    auto F = fp::CompositionFunction< decltype(calcCost) > { calcCost }.Compose(Buyer {}).Compose(lambda_cook_food).Compose(Scale {});
+    auto F = fp::CompositionFunction { calcCost }.Compose(Buyer {}).Compose(lambda_cook_food).Compose(Scale {});
 
     CHECK_ELEMENT_RESULT(my_data, F, weight);
 }
@@ -129,14 +129,14 @@ constexpr bool test_function_composition_constexpr() {
     std::vector< std::pair< double, double > > my_data { { 3, 1 }, { 5, 1 }, { 7, 1 }, { 8, 1 } };
     auto                                       nElements = my_data.size();
     EXPECTED_RESULT(double, 4, 6, 26, 54, 71);
-#else // _MSC_VER
+#else  // _MSC_VER
     std::pair< double, double > my_data[4] = { { 3, 1 }, { 5, 1 }, { 7, 1 }, { 8, 1 } };
     auto                        nElements  = 4;
     double                      results[4] = { 6, 26, 54, 71 };
     auto                        count      = 0;
 #endif // !_MSC_VER
 
-    constexpr auto F = fp::CompositionFunction< decltype(add_constexpr) > { add_constexpr }.Compose(square_constexpr).Compose(subtract_ten_constexpr);
+    constexpr auto F = fp::CompositionFunction { add_constexpr }.Compose(square_constexpr).Compose(subtract_ten_constexpr);
     static_assert(std::is_nothrow_invocable_v< decltype(F), std::pair< double, double > >);
 
     for (auto element : my_data) {
@@ -171,14 +171,14 @@ constexpr bool test_lambda_composition_constexpr() {
     auto my_data   = std::vector< int > { 3, 5, 7, 8 };
     auto nElements = my_data.size();
     EXPECTED_RESULT(double, 4, 6, 26, 54, 71);
-#else // _MSC_VER
-    int    my_data[4] = { 3, 5, 7, 8 };
-    auto   nElements  = 4;
-    double results[4] = { 6, 26, 54, 71 };
-    auto   count      = 0;
+#else  // _MSC_VER
+    int                         my_data[4] = { 3, 5, 7, 8 };
+    auto                        nElements  = 4;
+    double                      results[4] = { 6, 26, 54, 71 };
+    auto                        count      = 0;
 #endif // !_MSC_VER
 
-    constexpr auto F = fp::CompositionFunction< decltype(lambda_add_one_constexpr) > { lambda_add_one_constexpr }
+    constexpr auto F = fp::CompositionFunction { lambda_add_one_constexpr }
                            .Compose(lambda_int_to_double_constexpr)
                            .Compose(lambda_square_constexpr)
                            .Compose(lambda_subtract_ten_constexpr);
@@ -220,17 +220,14 @@ constexpr bool test_callable_struct_constexpr() {
     auto my_data = std::vector< Ingredient > { { IngredientType::Flour }, { IngredientType::Salad }, { IngredientType::Meat } };
     EXPECTED_RESULT(int, 3, 150, 50, 150);
     auto nElements = my_data.size();
-#else // _MSC_VER
-    Ingredient     my_data[3] = { { IngredientType::Flour }, { IngredientType::Salad }, { IngredientType::Meat } };
-    auto           nElements  = 3;
-    int            results[3] = { 150, 50, 150 };
-    auto           count      = 0;
+#else  // _MSC_VER
+    Ingredient                  my_data[3] = { { IngredientType::Flour }, { IngredientType::Salad }, { IngredientType::Meat } };
+    auto                        nElements  = 3;
+    int                         results[3] = { 150, 50, 150 };
+    auto                        count      = 0;
 #endif // !_MSC_VER
 
-    constexpr auto F = fp::CompositionFunction< decltype(constexpr_calcCost) > { constexpr_calcCost }
-                           .Compose(constexpr_Buyer {})
-                           .Compose(constexpr_lambda_cook_food)
-                           .Compose(constexpr_Scale {});
+    constexpr auto F = fp::CompositionFunction { constexpr_calcCost }.Compose(constexpr_Buyer {}).Compose(constexpr_lambda_cook_food).Compose(constexpr_Scale {});
 
     for (auto element : my_data) {
 
@@ -279,38 +276,35 @@ void test_traits() {
 
     {
         // Traits
-        static_assert(std::is_nothrow_invocable_v< decltype(fp::CompositionFunction< decltype(add) > { add }.Compose(square)), std::pair< double, double > >);
-        static_assert(!std::is_nothrow_invocable_v< decltype(fp::CompositionFunction< decltype(calcCost) > { calcCost }.Compose(Buyer {})), Ingredient >);
+        static_assert(std::is_nothrow_invocable_v< decltype(fp::CompositionFunction { add }.Compose(square)), std::pair< double, double > >);
+        static_assert(!std::is_nothrow_invocable_v< decltype(fp::CompositionFunction { calcCost }.Compose(Buyer {})), Ingredient >);
         static_assert(!std::is_nothrow_invocable_v< decltype(fp::Compose(lambda_add_one, lambda_int_to_double)), Ingredient >);
-        static_assert(std::is_invocable_v< decltype(fp::CompositionFunction< decltype(calcCost) > { calcCost }.Compose(Buyer {})), Ingredient >);
-        static_assert(!std::is_invocable_v< decltype(fp::CompositionFunction< decltype(calcCost) > { calcCost }.Compose(Buyer {})), std::pair< double, double > >);
+        static_assert(std::is_invocable_v< decltype(fp::CompositionFunction { calcCost }.Compose(Buyer {})), Ingredient >);
+        static_assert(!std::is_invocable_v< decltype(fp::CompositionFunction { calcCost }.Compose(Buyer {})), std::pair< double, double > >);
         static_assert(std::is_invocable_v< decltype(fp::Compose(lambda_add_one, lambda_int_to_double)), int >);
         static_assert(!std::is_invocable_v< decltype(fp::Compose(lambda_add_one, lambda_int_to_double)), Ingredient >);
 
-        static_assert(std::is_nothrow_invocable_v< decltype(fp::CompositionFunction< s_const_noexcept > { s_const_noexcept {} }), int >);
-        static_assert(!std::is_nothrow_invocable_v< decltype(fp::CompositionFunction< s_const > { s_const {} }), int >);
-        static_assert(std::is_invocable_v< decltype(fp::CompositionFunction< s_const > { s_const {} }), int >);
-        static_assert(std::is_nothrow_invocable_v< decltype(fp::CompositionFunction< s_noexcept > { s_noexcept {} }), int >);
-        static_assert(!std::is_nothrow_invocable_v< decltype(fp::CompositionFunction< s_none > { s_none {} }), int >);
-        static_assert(std::is_invocable_v< decltype(fp::CompositionFunction< s_none > { s_none {} }), int >);
+        static_assert(std::is_nothrow_invocable_v< decltype(fp::CompositionFunction { s_const_noexcept {} }), int >);
+        static_assert(!std::is_nothrow_invocable_v< decltype(fp::CompositionFunction { s_const {} }), int >);
+        static_assert(std::is_invocable_v< decltype(fp::CompositionFunction { s_const {} }), int >);
+        static_assert(std::is_nothrow_invocable_v< decltype(fp::CompositionFunction { s_noexcept {} }), int >);
+        static_assert(!std::is_nothrow_invocable_v< decltype(fp::CompositionFunction { s_none {} }), int >);
+        static_assert(std::is_invocable_v< decltype(fp::CompositionFunction { s_none {} }), int >);
 
-        static_assert(!std::is_nothrow_invocable_v< decltype(fp::CompositionFunction< s_const_noexcept > { s_const_noexcept {} }.Compose(s_const {})), int >);
-        static_assert(std::is_invocable_v< decltype(fp::CompositionFunction< s_const_noexcept > { s_const_noexcept {} }.Compose(s_const {})), int >);
-        static_assert(std::is_nothrow_invocable_v< decltype(fp::CompositionFunction< s_const_noexcept > { s_const_noexcept {} }.Compose(s_noexcept {})), int >);
-        static_assert(!std::is_nothrow_invocable_v< decltype(fp::CompositionFunction< s_const_noexcept > { s_const_noexcept {} }.Compose(s_none {})), int >);
-        static_assert(std::is_invocable_v< decltype(fp::CompositionFunction< s_const_noexcept > { s_const_noexcept {} }.Compose(s_none {})), int >);
-        static_assert(
-            !std::is_nothrow_invocable_v< decltype(fp::CompositionFunction< s_const_noexcept > { s_const_noexcept {} }.Compose(s_const {}).Compose(s_noexcept {})),
-                                          int >);
-        static_assert(
-            std::is_invocable_v< decltype(fp::CompositionFunction< s_const_noexcept > { s_const_noexcept {} }.Compose(s_const {}).Compose(s_noexcept {})), int >);
+        static_assert(!std::is_nothrow_invocable_v< decltype(fp::CompositionFunction { s_const_noexcept {} }.Compose(s_const {})), int >);
+        static_assert(std::is_invocable_v< decltype(fp::CompositionFunction { s_const_noexcept {} }.Compose(s_const {})), int >);
+        static_assert(std::is_nothrow_invocable_v< decltype(fp::CompositionFunction { s_const_noexcept {} }.Compose(s_noexcept {})), int >);
+        static_assert(!std::is_nothrow_invocable_v< decltype(fp::CompositionFunction { s_const_noexcept {} }.Compose(s_none {})), int >);
+        static_assert(std::is_invocable_v< decltype(fp::CompositionFunction { s_const_noexcept {} }.Compose(s_none {})), int >);
+        static_assert(!std::is_nothrow_invocable_v< decltype(fp::CompositionFunction { s_const_noexcept {} }.Compose(s_const {}).Compose(s_noexcept {})), int >);
+        static_assert(std::is_invocable_v< decltype(fp::CompositionFunction { s_const_noexcept {} }.Compose(s_const {}).Compose(s_noexcept {})), int >);
 
-        static_assert(!std::is_nothrow_invocable_v< decltype(fp::CompositionFunction< s_none > { s_none {} }.Compose(s_const {})), int >);
-        static_assert(std::is_invocable_v< decltype(fp::CompositionFunction< s_none > { s_none {} }.Compose(s_const {})), int >);
-        static_assert(!std::is_nothrow_invocable_v< decltype(fp::CompositionFunction< s_none > { s_none {} }.Compose(s_noexcept {})), int >);
-        static_assert(std::is_invocable_v< decltype(fp::CompositionFunction< s_none > { s_none {} }.Compose(s_noexcept {})), int >);
-        static_assert(!std::is_nothrow_invocable_v< decltype(fp::CompositionFunction< s_none > { s_none {} }.Compose(s_const_noexcept {})), int >);
-        static_assert(std::is_invocable_v< decltype(fp::CompositionFunction< s_none > { s_none {} }.Compose(s_const_noexcept {})), int >);
+        static_assert(!std::is_nothrow_invocable_v< decltype(fp::CompositionFunction { s_none {} }.Compose(s_const {})), int >);
+        static_assert(std::is_invocable_v< decltype(fp::CompositionFunction { s_none {} }.Compose(s_const {})), int >);
+        static_assert(!std::is_nothrow_invocable_v< decltype(fp::CompositionFunction { s_none {} }.Compose(s_noexcept {})), int >);
+        static_assert(std::is_invocable_v< decltype(fp::CompositionFunction { s_none {} }.Compose(s_noexcept {})), int >);
+        static_assert(!std::is_nothrow_invocable_v< decltype(fp::CompositionFunction { s_none {} }.Compose(s_const_noexcept {})), int >);
+        static_assert(std::is_invocable_v< decltype(fp::CompositionFunction { s_none {} }.Compose(s_const_noexcept {})), int >);
     }
     {
         // testing Using functor_traits
@@ -323,20 +317,20 @@ void test_traits() {
         static_assert(!fp::functor_traits< decltype(fp::Compose(f_except, f_except_mutable)) >::has_const);
         static_assert(!fp::functor_traits< decltype(fp::Compose(f_except, f_except_mutable)) >::has_noexcept);
 
-        static_assert(fp::functor_traits< decltype(fp::CompositionFunction< decltype(add) > { add }) >::has_const);
-        static_assert(fp::functor_traits< decltype(fp::CompositionFunction< decltype(add) > { add }.Compose(square)) >::has_noexcept);
-        static_assert(fp::functor_traits< decltype(fp::CompositionFunction< decltype(add) > { add }.Compose(square)) >::has_const);
-        static_assert(fp::functor_traits< decltype(fp::CompositionFunction< Buyer > { Buyer {} }) >::has_const);
-        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction< Buyer > { Buyer {} }) >::has_noexcept);
+        static_assert(fp::functor_traits< decltype(fp::CompositionFunction { add }) >::has_const);
+        static_assert(fp::functor_traits< decltype(fp::CompositionFunction { add }.Compose(square)) >::has_noexcept);
+        static_assert(fp::functor_traits< decltype(fp::CompositionFunction { add }.Compose(square)) >::has_const);
+        static_assert(fp::functor_traits< decltype(fp::CompositionFunction { Buyer {} }) >::has_const);
+        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction { Buyer {} }) >::has_noexcept);
 
-        static_assert(fp::functor_traits< decltype(fp::CompositionFunction< s_const_noexcept > { s_const_noexcept {} }) >::has_noexcept);
-        static_assert(fp::functor_traits< decltype(fp::CompositionFunction< s_const_noexcept > { s_const_noexcept {} }) >::has_const);
-        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction< s_const > { s_const {} }) >::has_noexcept);
-        static_assert(fp::functor_traits< decltype(fp::CompositionFunction< s_const > { s_const {} }) >::has_const);
-        static_assert(fp::functor_traits< decltype(fp::CompositionFunction< s_noexcept > { s_noexcept {} }) >::has_noexcept);
-        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction< s_noexcept > { s_noexcept {} }) >::has_const);
-        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction< s_none > { s_none {} }) >::has_noexcept);
-        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction< s_none > { s_none {} }) >::has_const);
+        static_assert(fp::functor_traits< decltype(fp::CompositionFunction { s_const_noexcept {} }) >::has_noexcept);
+        static_assert(fp::functor_traits< decltype(fp::CompositionFunction { s_const_noexcept {} }) >::has_const);
+        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction { s_const {} }) >::has_noexcept);
+        static_assert(fp::functor_traits< decltype(fp::CompositionFunction { s_const {} }) >::has_const);
+        static_assert(fp::functor_traits< decltype(fp::CompositionFunction { s_noexcept {} }) >::has_noexcept);
+        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction { s_noexcept {} }) >::has_const);
+        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction { s_none {} }) >::has_noexcept);
+        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction { s_none {} }) >::has_const);
 
         static_assert(!fp::functor_traits< decltype(fp::CompositionFunction< s_const_noexcept > { s_const_noexcept {} }.Compose(s_const {})) >::has_noexcept);
         static_assert(fp::functor_traits< decltype(fp::CompositionFunction< s_const_noexcept > { s_const_noexcept {} }.Compose(s_const {})) >::has_const);
@@ -344,52 +338,43 @@ void test_traits() {
         static_assert(!fp::functor_traits< decltype(fp::CompositionFunction< s_const_noexcept > { s_const_noexcept {} }.Compose(s_noexcept {})) >::has_const);
         static_assert(!fp::functor_traits< decltype(fp::CompositionFunction< s_const_noexcept > { s_const_noexcept {} }.Compose(s_none {})) >::has_noexcept);
         static_assert(!fp::functor_traits< decltype(fp::CompositionFunction< s_const_noexcept > { s_const_noexcept {} }.Compose(s_none {})) >::has_const);
-        static_assert(!fp::functor_traits< decltype(
-                          fp::CompositionFunction< s_const_noexcept > { s_const_noexcept {} }.Compose(s_const {}).Compose(s_noexcept {})) >::has_noexcept);
-        static_assert(
-            !fp::functor_traits< decltype(fp::CompositionFunction< s_const_noexcept > { s_const_noexcept {} }.Compose(s_const {}).Compose(s_noexcept {})) >::has_const);
+        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction { s_const_noexcept {} }.Compose(s_const {}).Compose(s_noexcept {})) >::has_noexcept);
+        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction { s_const_noexcept {} }.Compose(s_const {}).Compose(s_noexcept {})) >::has_const);
 
-        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction< s_none > { s_none {} }.Compose(s_const {})) >::has_noexcept);
-        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction< s_none > { s_none {} }.Compose(s_const {})) >::has_const);
-        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction< s_none > { s_none {} }.Compose(s_noexcept {})) >::has_noexcept);
-        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction< s_none > { s_none {} }.Compose(s_noexcept {})) >::has_const);
-        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction< s_none > { s_none {} }.Compose(s_const_noexcept {})) >::has_noexcept);
-        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction< s_none > { s_none {} }.Compose(s_const_noexcept {})) >::has_const);
+        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction { s_none {} }.Compose(s_const {})) >::has_noexcept);
+        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction { s_none {} }.Compose(s_const {})) >::has_const);
+        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction { s_none {} }.Compose(s_noexcept {})) >::has_noexcept);
+        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction { s_none {} }.Compose(s_noexcept {})) >::has_const);
+        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction { s_none {} }.Compose(s_const_noexcept {})) >::has_noexcept);
+        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction { s_none {} }.Compose(s_const_noexcept {})) >::has_const);
     }
     {
         // Traits
-        static_assert(std::is_nothrow_invocable_v< decltype(fp::CompositionFunction< decltype(f_noexcept) > { f_noexcept }), int >);
-        static_assert(std::is_nothrow_invocable_v< decltype(fp::CompositionFunction< decltype(f_noexcept) > { f_noexcept }.Compose(f_noexcept_2)), int >);
-        static_assert(
-            std::is_nothrow_invocable_v< decltype(fp::CompositionFunction< decltype(f_noexcept) > { f_noexcept }.Compose(f_noexcept_2).Compose(f_noexcept_mutable)),
-                                         int >);
-        static_assert(!std::is_nothrow_invocable_v< decltype(fp::CompositionFunction< decltype(f_except) > { f_except }), int >);
-        static_assert(!std::is_nothrow_invocable_v< decltype(fp::CompositionFunction< decltype(f_noexcept) > { f_noexcept }.Compose(f_except)), int >);
-        static_assert(
-            !std::is_nothrow_invocable_v< decltype(fp::CompositionFunction< decltype(f_noexcept) > { f_noexcept }.Compose(f_except).Compose(f_noexcept_2)), int >);
-        static_assert(!std::is_nothrow_invocable_v< decltype(fp::CompositionFunction< decltype(f_except) > { f_except }.Compose(f_noexcept)), int >);
+        static_assert(std::is_nothrow_invocable_v< decltype(fp::CompositionFunction { f_noexcept }), int >);
+        static_assert(std::is_nothrow_invocable_v< decltype(fp::CompositionFunction { f_noexcept }.Compose(f_noexcept_2)), int >);
+        static_assert(std::is_nothrow_invocable_v< decltype(fp::CompositionFunction { f_noexcept }.Compose(f_noexcept_2).Compose(f_noexcept_mutable)), int >);
+        static_assert(!std::is_nothrow_invocable_v< decltype(fp::CompositionFunction { f_except }), int >);
+        static_assert(!std::is_nothrow_invocable_v< decltype(fp::CompositionFunction { f_noexcept }.Compose(f_except)), int >);
+        static_assert(!std::is_nothrow_invocable_v< decltype(fp::CompositionFunction { f_noexcept }.Compose(f_except).Compose(f_noexcept_2)), int >);
+        static_assert(!std::is_nothrow_invocable_v< decltype(fp::CompositionFunction { f_except }.Compose(f_noexcept)), int >);
     }
     {
-        static_assert(fp::functor_traits< decltype(fp::CompositionFunction< decltype(f_noexcept) > { f_noexcept }) >::has_noexcept);
-        static_assert(fp::functor_traits< decltype(fp::CompositionFunction< decltype(f_noexcept) > { f_noexcept }.Compose(f_noexcept_2)) >::has_noexcept);
-        static_assert(fp::functor_traits< decltype(
-                          fp::CompositionFunction< decltype(f_noexcept) > { f_noexcept }.Compose(f_noexcept_2).Compose(f_noexcept_mutable)) >::has_noexcept);
-        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction< decltype(f_except) > { f_except }) >::has_noexcept);
-        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction< decltype(f_noexcept) > { f_noexcept }.Compose(f_except)) >::has_noexcept);
-        static_assert(
-            !fp::functor_traits< decltype(fp::CompositionFunction< decltype(f_noexcept) > { f_noexcept }.Compose(f_except).Compose(f_noexcept_2)) >::has_noexcept);
-        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction< decltype(f_except) > { f_except }.Compose(f_noexcept)) >::has_noexcept);
+        static_assert(fp::functor_traits< decltype(fp::CompositionFunction { f_noexcept }) >::has_noexcept);
+        static_assert(fp::functor_traits< decltype(fp::CompositionFunction { f_noexcept }.Compose(f_noexcept_2)) >::has_noexcept);
+        static_assert(fp::functor_traits< decltype(fp::CompositionFunction { f_noexcept }.Compose(f_noexcept_2).Compose(f_noexcept_mutable)) >::has_noexcept);
+        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction { f_except }) >::has_noexcept);
+        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction { f_noexcept }.Compose(f_except)) >::has_noexcept);
+        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction { f_noexcept }.Compose(f_except).Compose(f_noexcept_2)) >::has_noexcept);
+        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction { f_except }.Compose(f_noexcept)) >::has_noexcept);
     }
     {
-        static_assert(fp::functor_traits< decltype(fp::CompositionFunction< decltype(f_noexcept) > { f_noexcept }) >::has_noexcept);
-        static_assert(fp::functor_traits< decltype(fp::CompositionFunction< decltype(f_noexcept) > { f_noexcept }.Compose(f_noexcept_2)) >::has_noexcept);
-        static_assert(fp::functor_traits< decltype(
-                          fp::CompositionFunction< decltype(f_noexcept) > { f_noexcept }.Compose(f_noexcept_2).Compose(f_noexcept_mutable)) >::has_noexcept);
-        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction< decltype(f_except) > { f_except }) >::has_noexcept);
-        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction< decltype(f_noexcept) > { f_noexcept }.Compose(f_except)) >::has_noexcept);
-        static_assert(
-            !fp::functor_traits< decltype(fp::CompositionFunction< decltype(f_noexcept) > { f_noexcept }.Compose(f_except).Compose(f_noexcept_2)) >::has_noexcept);
-        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction< decltype(f_except) > { f_except }.Compose(f_noexcept)) >::has_noexcept);
+        static_assert(fp::functor_traits< decltype(fp::CompositionFunction { f_noexcept }) >::has_noexcept);
+        static_assert(fp::functor_traits< decltype(fp::CompositionFunction { f_noexcept }.Compose(f_noexcept_2)) >::has_noexcept);
+        static_assert(fp::functor_traits< decltype(fp::CompositionFunction { f_noexcept }.Compose(f_noexcept_2).Compose(f_noexcept_mutable)) >::has_noexcept);
+        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction { f_except }) >::has_noexcept);
+        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction { f_noexcept }.Compose(f_except)) >::has_noexcept);
+        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction { f_noexcept }.Compose(f_except).Compose(f_noexcept_2)) >::has_noexcept);
+        static_assert(!fp::functor_traits< decltype(fp::CompositionFunction { f_except }.Compose(f_noexcept)) >::has_noexcept);
     }
 }
 
