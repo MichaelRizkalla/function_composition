@@ -123,7 +123,6 @@ constexpr double subtract_ten_constexpr(double x) noexcept {
     return x - 10.;
 }
 
-#ifndef _MSC_VER
 constexpr bool test_function_composition_constexpr() {
 #ifdef _MSC_VER
     std::vector< std::pair< double, double > > my_data { { 3, 1 }, { 5, 1 }, { 7, 1 }, { 8, 1 } };
@@ -139,7 +138,7 @@ constexpr bool test_function_composition_constexpr() {
     constexpr auto F = fp::CompositionFunction { add_constexpr }.Compose(square_constexpr).Compose(subtract_ten_constexpr);
     static_assert(std::is_nothrow_invocable_v< decltype(F), std::pair< double, double > >);
 
-    for (auto element : my_data) {
+    for (auto& element : my_data) {
 
         if (F(element) != results[count]) {
             return false;
@@ -151,7 +150,7 @@ constexpr bool test_function_composition_constexpr() {
     }
     return true;
 }
-// static_assert((test_function_composition_constexpr(), true));
+static_assert((test_function_composition_constexpr(), true));
 
 static auto lambda_add_one_constexpr = [](int x) constexpr noexcept {
     return x + 1;
@@ -184,7 +183,7 @@ constexpr bool test_lambda_composition_constexpr() {
                            .Compose(lambda_subtract_ten_constexpr);
     static_assert(!std::is_nothrow_invocable_v< decltype(F), int >);
 
-    for (auto element : my_data) {
+    for (auto& element : my_data) {
 
         if (F(element) != results[count]) {
             return false;
@@ -196,7 +195,7 @@ constexpr bool test_lambda_composition_constexpr() {
     }
     return true;
 }
-// static_assert((test_lambda_composition_constexpr(), true));
+static_assert((test_lambda_composition_constexpr(), true));
 
 constexpr Cost constexpr_calcCost(Ingredient ing) {
     return Cost { static_cast< std::uint8_t >(ing.type) * 10 };
@@ -229,7 +228,7 @@ constexpr bool test_callable_struct_constexpr() {
 
     constexpr auto F = fp::CompositionFunction { constexpr_calcCost }.Compose(constexpr_Buyer {}).Compose(constexpr_lambda_cook_food).Compose(constexpr_Scale {});
 
-    for (auto element : my_data) {
+    for (auto& element : my_data) {
 
         if (F(element).weight != results[count]) {
             return false;
@@ -242,7 +241,6 @@ constexpr bool test_callable_struct_constexpr() {
     return true;
 }
 static_assert((test_callable_struct_constexpr(), true));
-#endif // _MSC_VER
 
 static auto f_noexcept         = [](int x) noexcept { return x; };
 static auto f_noexcept_2       = [](int x) noexcept { return x; };
@@ -384,9 +382,8 @@ int main() {
     test_lambda_composition();
     test_free_compose();
     test_combination();
-#ifndef _MSC_VER
+
     assert(test_function_composition_constexpr() == true);
     assert(test_lambda_composition_constexpr() == true);
     assert(test_callable_struct_constexpr() == true);
-#endif // _MSC_VER
 }
