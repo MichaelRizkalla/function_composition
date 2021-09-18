@@ -2,8 +2,9 @@
 // This header contains a helper implementation to aid in function composition
 // while keeping noexcept and const specifiers whenever possible
 //
-// Created By: Michael Rizkalla
-// Date:		02/04/2021
+// Created By:          Michael Rizkalla
+// Date:		        02/04/2021
+// Updated Rev1.:       18/09/2021
 
 #ifndef COMPOSITION_HELPER_HPP
 #define COMPOSITION_HELPER_HPP
@@ -11,6 +12,7 @@
 #include <cstring>
 #include <functional>
 #include <stdint.h>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 
@@ -20,18 +22,46 @@ namespace traits {
     struct list {};
     template < class... >
     struct pop_first_from_list;
+    template < class... >
+    struct count_list_element;
+    template < class... >
+    struct push_element_in_front_of_list;
+    namespace impl {
+        template < std::size_t Count, class... >
+        struct pop_n_element_from_list_impl;
+
+        template < template < typename... > class List, class Type, class... Types >
+        struct pop_n_element_from_list_impl< 0, List< Type, Types... > > {
+            using type      = Type;
+            using list_type = List< Types... >;
+        };
+        template < std::size_t Count, template < typename... > class List, class Type, class... Types >
+        struct pop_n_element_from_list_impl< Count, List< Type, Types... > > {
+            using type      = pop_n_element_from_list_impl< Count - 1, List< Types... > >::type;
+            using list_type = pop_n_element_from_list_impl< Count - 1, List< Types... > >::list_type;
+        };
+    } // namespace impl
+    template < std::size_t N, class... >
+    struct pop_n_element_from_list;
 
     template < template < typename... > class List >
     struct pop_first_from_list< List<> > {
-        using type = void;
+        using type      = void;
+        using list_type = List<>;
     };
     template < template < typename... > class List, class FirstType, class... Types >
     struct pop_first_from_list< List< FirstType, Types... > > {
-        using type = FirstType;
+        using type      = FirstType;
+        using list_type = List< Types... >;
     };
 
-    template < class... >
-    struct count_list_element;
+    template < std::size_t N, template < typename... > class List, class... Types >
+    struct pop_n_element_from_list< N, List< Types... > > {
+        static_assert(count_list_element< List< Types... > >::value > N, "List is smaller than N elements");
+        using type      = impl::pop_n_element_from_list_impl< N, List< Types... > >::type;
+        using list_type = impl::pop_n_element_from_list_impl< N, List< Types... > >::list_type;
+    };
+
     template < template < typename... > class List >
     struct count_list_element< List<> > {
         static constexpr uint64_t value = 0;
@@ -43,6 +73,11 @@ namespace traits {
     template < template < typename... > class List, class FirstType, class... Types >
     struct count_list_element< List< FirstType, Types... > > {
         static constexpr uint64_t value = 1 + count_list_element< List< Types... > >::value;
+    };
+
+    template < template < class... > class List, class Element, class... Types >
+    struct push_element_in_front_of_list< Element, List< Types... > > {
+        using type = List< Element, Types... >;
     };
 
     template < class... >
@@ -63,6 +98,30 @@ namespace traits {
         using typename impl::functor_traits_eval< Ret, Args... >::argument_types;
         using impl::functor_traits_eval< Ret, Args... >::value;
         static constexpr auto has_noexcept = false;
+        static constexpr auto has_const    = false;
+    };
+    template < template < class... > class Func, class Ret, class... Args >
+    struct functor_traits< Func< Ret(Args...) noexcept > > : public impl::functor_traits_eval< Ret, Args... > {
+        using typename impl::functor_traits_eval< Ret, Args... >::return_type;
+        using typename impl::functor_traits_eval< Ret, Args... >::argument_types;
+        using impl::functor_traits_eval< Ret, Args... >::value;
+        static constexpr auto has_noexcept = true;
+        static constexpr auto has_const    = false;
+    };
+    template < class Ret, class... Args >
+    struct functor_traits< Ret(Args...) > : public impl::functor_traits_eval< Ret, Args... > {
+        using typename impl::functor_traits_eval< Ret, Args... >::return_type;
+        using typename impl::functor_traits_eval< Ret, Args... >::argument_types;
+        using impl::functor_traits_eval< Ret, Args... >::value;
+        static constexpr auto has_noexcept = false;
+        static constexpr auto has_const    = false;
+    };
+    template < class Ret, class... Args >
+    struct functor_traits< Ret(Args...) noexcept > : public impl::functor_traits_eval< Ret, Args... > {
+        using typename impl::functor_traits_eval< Ret, Args... >::return_type;
+        using typename impl::functor_traits_eval< Ret, Args... >::argument_types;
+        using impl::functor_traits_eval< Ret, Args... >::value;
+        static constexpr auto has_noexcept = true;
         static constexpr auto has_const    = false;
     };
     template < class Ret, class... Args >
@@ -122,7 +181,9 @@ namespace traits {
         static constexpr auto has_const    = false;
     };
     template < class Type >
-    requires std::is_class_v< Type > struct functor_traits< Type > : public functor_traits< decltype(&Type::operator()) > {};
+    requires std::is_class_v< Type >
+    struct functor_traits< Type > : public functor_traits< decltype(&Type::operator()) > {
+    };
 
     // Type trait checks if two callables are composable
     template < class FirstCallable, class SecondCallable >
@@ -139,327 +200,214 @@ namespace traits {
 
     template < class FirstCallable, class SecondCallable >
     concept composable = is_composable< FirstCallable, SecondCallable >::value;
+
 } // namespace traits
 
 namespace fp {
     using namespace traits;
     // CompisitionFunction Forward Declaration
-    template < class Signature, class Closure = void >
+    template < class... TFunctions >
     struct CompositionFunction;
 
     namespace impl {
 
-        template < class... >
-        struct ClosureToBase;
-        template < class... >
-        struct CompositionFunctionImpl;
-        template < class... >
-        struct CompositionFunctionBase;
-        template < class Closure, class RetType, class... Args >
-        struct NonCompositionFunction {
-            NonCompositionFunction() { /*static_assert(false, "The entity is not a callable/functor!");*/
-            }
+        template < class TFunction, class TFunctionTuple, std::size_t... Indices >
+        static constexpr auto make_composition_func(TFunctionTuple functions, TFunction function, std::index_sequence< Indices... >) {
+            fp::CompositionFunction new_func(std::get< Indices >(functions)..., function);
+            return new_func;
+        }
+
+        template < class... TFunctions >
+        struct CompositionFunctionTraits {
+          private:
+            /// <summary>
+            /// tests if a type holds a const qualified callable.
+            /// Free functions, and function pointers are considered 'const' qualified.
+            /// </summary>
+            template < class EvalType >
+            using ConstTest = std::bool_constant< std::negation_v< std::is_class< std::remove_const_t< EvalType > > > ||
+                                                  fp::functor_traits< std::remove_const_t< EvalType > >::has_const >;
+
+            template < class Func >
+            static constexpr auto f_has_noexcept() -> std::bool_constant< fp::functor_traits< Func >::has_noexcept >;
+
+            template < class Func, class... Args >
+            static constexpr auto f_has_noexcept() -> std::bool_constant< fp::functor_traits< Func >::has_noexcept&& decltype(f_has_noexcept< Args... >())::value >;
+
+            template < class Func >
+            static constexpr auto f_has_const() -> ConstTest< Func >;
+
+            template < class Func, class... Args >
+            static constexpr auto f_has_const() -> std::bool_constant< ConstTest< Func >::value&& decltype(f_has_const< Args... >())::value >;
+
+          public:
+            using return_type      = typename fp::functor_traits< std::tuple_element_t< sizeof...(TFunctions) - 1, std::tuple< TFunctions... > > >::return_type;
+            using argument_types   = typename fp::functor_traits< std::tuple_element_t< 0, std::tuple< TFunctions... > > >::argument_types;
+            using outer_function_t = std::decay_t< std::tuple_element_t< sizeof...(TFunctions) - 1, std::tuple< TFunctions... > > >;
+
+            template < std::size_t N, class Enable = std::enable_if_t< std::bool_constant< (N < sizeof...(TFunctions)) >::value > >
+            using nth_function_t = std::decay_t< std::tuple_element_t< N, std::tuple< TFunctions... > > >;
+
+            static constexpr auto has_noexcept = decltype(f_has_noexcept< TFunctions... >())::value;
+            static constexpr auto has_const    = decltype(f_has_const< TFunctions... >())::value;
         };
-        struct IsNoExcept {};
 
-        /// <summary>
-        /// tests if a type holds a const qualified callable.
-        /// Free functions, and function pointers are considered 'const' qualified.
-        /// </summary>
-        template < class EvalType >
-        using ConstTest =
-            std::bool_constant< std::negation_v< std::is_class< std::remove_const_t< EvalType > > > || fp::functor_traits< std::remove_const_t< EvalType > >::has_const >;
+        template < class TFunctionTuple, class... Args >
+        struct FunctionHelper {
 
-        /// <summary>
-        /// CompositionFunction shared base class
-        /// </summary>
-        struct ICompositionFunction {
-            constexpr ICompositionFunction()                            = default;
-            constexpr ICompositionFunction(const ICompositionFunction&) = default;
-            constexpr ICompositionFunction(ICompositionFunction&&)      = default;
-            constexpr ICompositionFunction& operator=(const ICompositionFunction&) = default;
-            constexpr ICompositionFunction& operator=(ICompositionFunction&&) = default;
-            constexpr ~ICompositionFunction()                                 = default;
-        };
-
-        /// <summary>
-        /// CompositionFunction data class
-        /// </summary>
-        template < class Type, class... Args >
-        struct ICompositionFunctionData : public ICompositionFunction {
-          protected:
-            using UnderlyingFunctionType = std::remove_const_t< Type >;
+            struct first_function_call {};
+            struct remaining_function_call {};
 
           private:
-            template < class FType >
-            struct FunctionStorage { // Store function object/pointer
-                FType Storage;
+            template < class Type, class TFunction >
+            static constexpr auto call(Type arg, TFunction function) {
+                return function(std::forward< Type >(arg));
+            }
+
+            template < class Type, class TFunction, class... TFunctions >
+            static constexpr auto call(Type arg, TFunction function, TFunctions... functions) {
+                auto res = function(std::forward< Type >(arg));
+                return call(res, functions...);
+            }
+
+            template < class TFunction >
+            static constexpr auto call_first(TFunction& function, Args... args) {
+                return function(std::forward< Args >(args)...);
+            }
+
+            template < class TFunction, class... TFunctions >
+            static constexpr auto call_first(TFunction& function, TFunctions... functions, Args... args) {
+                auto res = function(std::forward< Args >(args)...);
+                return call(res, functions...);
+            }
+
+            template < std::size_t... Indices >
+            static constexpr auto chainCallHelper(TFunctionTuple& functions, std::index_sequence< Indices... >, Args... args) {
+                return call_first< decltype(std::get< Indices >(functions))... >(std::get< Indices >(functions)..., std::forward< Args >(args)...);
+            }
+
+          public:
+            static constexpr auto ChainCalls(TFunctionTuple functions, Args... args) {
+                return chainCallHelper(functions, std::make_index_sequence< std::tuple_size< TFunctionTuple >::value > {}, std::forward< Args >(args)...);
+            }
+        };
+
+        template < class TupleType >
+        struct IFunction {
+          public:
+            constexpr IFunction() = default;
+
+            constexpr virtual TupleType GetFunctions() const noexcept = 0;
+        };
+
+        template < bool has_const, class tuple_type, bool has_noexcept, class Ret, class... Args >
+        struct FunctionBase_;
+
+        template < class TupleType, bool has_noexcept, class Ret, template < class... > class List, class... Args >
+        struct FunctionBase_< true, TupleType, has_noexcept, Ret, List< Args... > > : public IFunction< TupleType > {
+
+          protected:
+            using IBase = IFunction< TupleType >;
+
+          public:
+            constexpr FunctionBase_(TupleType&& functions) : mFunctions(std::move(functions)) {
+            }
+
+            constexpr Ret operator()(Args... args) const noexcept(has_noexcept) {
+                return FunctionHelper< TupleType, Args... >::ChainCalls(mFunctions, std::forward< Args >(args)...);
+            }
+
+            constexpr TupleType GetFunctions() const noexcept override {
+                return mFunctions;
             };
 
-            using FStorage          = FunctionStorage< UnderlyingFunctionType >;
-            using MyFunctionStorage = FStorage;
-
-          public:
-            [[nodiscard]] constexpr ICompositionFunctionData(UnderlyingFunctionType&& func) : function_storage(std::move(func)) {
-            }
-            [[nodiscard]] constexpr ICompositionFunctionData(const UnderlyingFunctionType& func) : function_storage(func) {
-            }
-            [[nodiscard]] constexpr ICompositionFunctionData(const ICompositionFunctionData&) = default;
-            [[nodiscard]] constexpr ICompositionFunctionData(ICompositionFunctionData&&)      = default;
-            [[nodiscard]] constexpr ICompositionFunctionData& operator=(const ICompositionFunctionData&) = default;
-            [[nodiscard]] constexpr ICompositionFunctionData& operator=(ICompositionFunctionData&&) = default;
-            constexpr ~ICompositionFunctionData()                                                   = default;
-
           protected:
-            MyFunctionStorage function_storage;
+            TupleType mFunctions;
         };
 
-        /// <summary>
-        /// Provides const overload of operator()
-        /// </summary>
-        template < class Type, class RetType, class... Args >
-        struct ConstCaller : public ICompositionFunctionData< Type, Args... > {
+        template < class TupleType, bool has_noexcept, class Ret, template < class... > class List, class... Args >
+        struct FunctionBase_< false, TupleType, has_noexcept, Ret, List< Args... > > : public IFunction< TupleType > {
+
           private:
-            using DataBase = ICompositionFunctionData< Type, Args... >;
+            using IBase = IFunction< TupleType >;
+
+          public:
+            FunctionBase_(TupleType&& functions) : mFunctions(std::move(functions)) {
+            }
+
+            Ret operator()(Args... args) noexcept(has_noexcept) {
+                return FunctionHelper< TupleType, Args... >::ChainCalls(mFunctions, std::forward< Args >(args)...);
+            }
+
+            constexpr TupleType GetFunctions() const noexcept override {
+                return mFunctions;
+            };
 
           protected:
-            using typename DataBase::UnderlyingFunctionType;
-            using return_type = RetType;
-
-          public:
-            [[nodiscard]] constexpr ConstCaller(UnderlyingFunctionType&& func) : DataBase(std::move(func)) {
-            }
-            [[nodiscard]] constexpr ConstCaller(const UnderlyingFunctionType& func) : DataBase(func) {
-            }
-            [[nodiscard]] constexpr ConstCaller(const ConstCaller&) = default;
-            [[nodiscard]] constexpr ConstCaller(ConstCaller&&)      = default;
-            [[nodiscard]] constexpr ConstCaller& operator=(const ConstCaller&) = default;
-            [[nodiscard]] constexpr ConstCaller& operator=(ConstCaller&&) = default;
-            constexpr ~ConstCaller()                                      = default;
-
-            [[nodiscard]] constexpr auto operator()(Args... args) const noexcept(noexcept(std::declval< UnderlyingFunctionType >()(std::declval< Args >()...)))
-                -> RetType {
-                return DataBase::function_storage.Storage.operator()(args...);
-            }
+            TupleType mFunctions;
         };
 
-        /// <summary>
-        /// Provides non-const overload of operator()
-        /// </summary>
-        template < class Type, class RetType, class... Args >
-        struct NonConstCaller : public ICompositionFunctionData< Type, Args... > {
-          private:
-            using DataBase = ICompositionFunctionData< Type, Args... >;
-
-          protected:
-            using typename DataBase::UnderlyingFunctionType;
-            using return_type = RetType;
-
-          public:
-            [[nodiscard]] constexpr NonConstCaller(UnderlyingFunctionType&& func) : DataBase(std::move(func)) {
-            }
-            [[nodiscard]] constexpr NonConstCaller(const UnderlyingFunctionType& func) : DataBase(func) {
-            }
-            [[nodiscard]] constexpr NonConstCaller(const NonConstCaller&) = default;
-            [[nodiscard]] constexpr NonConstCaller(NonConstCaller&&)      = default;
-            [[nodiscard]] constexpr NonConstCaller& operator=(const NonConstCaller&) = default;
-            [[nodiscard]] constexpr NonConstCaller& operator=(NonConstCaller&&) = default;
-            constexpr ~NonConstCaller()                                         = default;
-
-            [[nodiscard]] constexpr auto operator()(Args... args) noexcept(noexcept(std::declval< UnderlyingFunctionType >()(std::declval< Args >()...))) -> RetType {
-                return DataBase::function_storage.Storage.operator()(args...);
-            }
-        };
-
-        template < class FunctionType, class RetType, class... Args >
-        using CallerChooser = std::conditional_t< ConstTest< FunctionType >::value, ConstCaller< std::remove_const_t< FunctionType >, RetType, Args... >,
-                                                  NonConstCaller< std::remove_const_t< FunctionType >, RetType, Args... > >;
-
-        /// <summary>
-        /// CompositionFunction basic functionality.
-        /// </summary>
-        template < class FunctionType, class RetType, class... Args >
-        struct CompositionFunctionBase< FunctionType, RetType(Args...) > : public CallerChooser< FunctionType, RetType, Args... > {
-          private:
-            using IsConst    = ConstTest< FunctionType >;
-            using CallerBase = CallerChooser< FunctionType, RetType, Args... >;
-
-          protected:
-            using typename CallerBase::UnderlyingFunctionType;
-            using typename CallerBase::return_type;
-
-          public:
-            [[nodiscard]] constexpr CompositionFunctionBase(UnderlyingFunctionType&& func) : CallerBase(std::move(func)) {
-            }
-            [[nodiscard]] constexpr CompositionFunctionBase(const UnderlyingFunctionType& func) : CallerBase(func) {
-            }
-            [[nodiscard]] constexpr CompositionFunctionBase(const CompositionFunctionBase&) = default;
-            [[nodiscard]] constexpr CompositionFunctionBase(CompositionFunctionBase&&)      = default;
-            [[nodiscard]] constexpr CompositionFunctionBase& operator=(const CompositionFunctionBase&) = default;
-            [[nodiscard]] constexpr CompositionFunctionBase& operator=(CompositionFunctionBase&&) = default;
-            constexpr ~CompositionFunctionBase()                                                  = default;
-
-            [[nodiscard]] constexpr auto operator->() const noexcept requires std::is_class_v< std::remove_cvref_t< UnderlyingFunctionType > > {
-                return &CallerBase::function_storage.Storage;
-            }
-
-            [[nodiscard]] constexpr auto operator->() noexcept requires std::is_class_v< std::remove_cvref_t< UnderlyingFunctionType > > {
-                return &CallerBase::function_storage.Storage;
-            }
-
-            template < class SecondCallable, class ComposedRetType = typename functor_traits< std::decay_t< SecondCallable > >::return_type >
-            [[nodiscard]] constexpr auto Compose(SecondCallable&& secondFunc) const
-                requires composable< std::decay_t< UnderlyingFunctionType >, std::decay_t< SecondCallable > > {
-                if constexpr (ConstTest< SecondCallable >::value && IsConst::value) {
-                    auto composedFunction = [function__ = CallerBase::function_storage.Storage, secondFunc](Args... args) constexpr noexcept(
-                                                noexcept(std::declval< SecondCallable >()(std::declval< UnderlyingFunctionType >()(std::declval< Args >()...))))
-                                                ->ComposedRetType {
-                        return secondFunc(function__(std::forward< Args >(args)...));
-                    };
-                    return CompositionFunction< ComposedRetType(Args...), decltype(composedFunction) >(std::move(composedFunction));
-                } else {
-                    auto composedFunction = [function__ = CallerBase::function_storage.Storage, secondFunc](Args... args) constexpr mutable noexcept(
-                                                noexcept(std::declval< SecondCallable >()(std::declval< UnderlyingFunctionType >()(std::declval< Args >()...))))
-                                                ->ComposedRetType {
-                        return secondFunc(function__(std::forward< Args >(args)...));
-                    };
-                    return CompositionFunction< ComposedRetType(Args...), decltype(composedFunction) >(std::move(composedFunction));
-                }
-            }
-        };
-
-        template < class Closure, class RetType, template < class... > class List, class... Args >
-        struct ClosureToBase< Closure, RetType, List< Args... > > {
-          public:
-            using type = CompositionFunctionBase< Closure, RetType(Args...) >;
-        };
-
-        template < class NoExcept, class Closure, class RetType, class... Args >
-        using BaseChooser = std::conditional_t<
-            std::is_same_v< Closure, void >,
-            std::conditional_t< std::is_same_v< NoExcept, IsNoExcept >, CompositionFunctionBase< RetType (*)(Args...) noexcept, RetType(Args...) >,
-                                CompositionFunctionBase< RetType (*)(Args...), RetType(Args...) > >,
-            std::conditional_t<
-                std::conjunction_v< std::is_class< Closure >, std::negation< std::is_base_of< ICompositionFunction, Closure > > >,
-                std::conditional_t<
-                    functor_traits< Closure >::value,
-                    typename ClosureToBase< Closure, typename functor_traits< Closure >::return_type, typename functor_traits< Closure >::argument_types >::type,
-                    NonCompositionFunction< Closure, typename functor_traits< Closure >::return_type, typename functor_traits< Closure >::argument_types > >,
-                CompositionFunctionBase< Closure, RetType(Args...) > > >;
-
-        /////////////////////////////////////////////////////////////////////////////////////
-        // The following three base classes detects and handle different function signatures.
-        /////////////////////////////////////////////////////////////////////////////////////
-
-        template < class Closure, class ClosureType >
-        struct CompositionFunctionImpl< Closure, ClosureType > : public BaseChooser< void, ClosureType, void > {
-          protected:
-            using ImplBase         = BaseChooser< void, ClosureType, void >;
-            using ImplFunctionType = typename ImplBase::UnderlyingFunctionType;
-            using typename ImplBase::return_type;
-
-          public:
-            [[nodiscard]] constexpr CompositionFunctionImpl(ImplFunctionType&& func) : ImplBase(std::move(func)) {
-            }
-            [[nodiscard]] constexpr CompositionFunctionImpl(const ImplFunctionType& func) : ImplBase(func) {
-            }
-            [[nodiscard]] constexpr CompositionFunctionImpl(const CompositionFunctionImpl&) = default;
-            [[nodiscard]] constexpr CompositionFunctionImpl(CompositionFunctionImpl&&)      = default;
-            [[nodiscard]] constexpr CompositionFunctionImpl& operator=(const CompositionFunctionImpl&) = default;
-            [[nodiscard]] constexpr CompositionFunctionImpl& operator=(CompositionFunctionImpl&&) = default;
-            constexpr ~CompositionFunctionImpl()                                                  = default;
-        };
-
-        template < class Closure, class RetType, class... Args >
-        struct CompositionFunctionImpl< Closure, RetType(Args...) > : public BaseChooser< void, Closure, RetType, Args... > {
-          protected:
-            using ImplBase         = BaseChooser< void, Closure, RetType, Args... >;
-            using ImplFunctionType = typename ImplBase::UnderlyingFunctionType;
-            using typename ImplBase::return_type;
-
-          public:
-            [[nodiscard]] constexpr CompositionFunctionImpl(ImplFunctionType&& func) : ImplBase(std::move(func)) {
-            }
-            [[nodiscard]] constexpr CompositionFunctionImpl(const ImplFunctionType& func) : ImplBase(func) {
-            }
-            [[nodiscard]] constexpr CompositionFunctionImpl(const CompositionFunctionImpl&) = default;
-            [[nodiscard]] constexpr CompositionFunctionImpl(CompositionFunctionImpl&&)      = default;
-            [[nodiscard]] constexpr CompositionFunctionImpl& operator=(const CompositionFunctionImpl&) = default;
-            [[nodiscard]] constexpr CompositionFunctionImpl& operator=(CompositionFunctionImpl&&) = default;
-            constexpr ~CompositionFunctionImpl()                                                  = default;
-        };
-
-        template < class Closure, class RetType, class... Args >
-        struct CompositionFunctionImpl< Closure, RetType(Args...) noexcept > : public BaseChooser< IsNoExcept, Closure, RetType, Args... > {
-          protected:
-            using ImplBase         = BaseChooser< IsNoExcept, Closure, RetType, Args... >;
-            using ImplFunctionType = typename ImplBase::UnderlyingFunctionType;
-            using typename ImplBase::return_type;
-
-          public:
-            [[nodiscard]] constexpr CompositionFunctionImpl(ImplFunctionType&& func) : ImplBase(std::move(func)) {
-            }
-            [[nodiscard]] constexpr CompositionFunctionImpl(const ImplFunctionType& func) : ImplBase(func) {
-            }
-            [[nodiscard]] constexpr CompositionFunctionImpl(const CompositionFunctionImpl&) = default;
-            [[nodiscard]] constexpr CompositionFunctionImpl(CompositionFunctionImpl&&)      = default;
-            [[nodiscard]] constexpr CompositionFunctionImpl& operator=(const CompositionFunctionImpl&) = default;
-            [[nodiscard]] constexpr CompositionFunctionImpl& operator=(CompositionFunctionImpl&&) = default;
-            constexpr ~CompositionFunctionImpl()                                                  = default;
-        };
+        template < class... TFunctions >
+        using FunctionBase = FunctionBase_< CompositionFunctionTraits< TFunctions... >::has_const, std::tuple< std::decay_t< TFunctions >... >,
+                                            CompositionFunctionTraits< TFunctions... >::has_noexcept, typename CompositionFunctionTraits< TFunctions... >::return_type,
+                                            typename CompositionFunctionTraits< TFunctions... >::argument_types >;
 
     } // namespace impl
 
-    /// <summary>
-    /// Represents a callable
-    /// It can be composed with another callable
-    /// </summary>
-    template < class Signature, class Closure >
-    struct CompositionFunction final : public impl::CompositionFunctionImpl< Closure, Signature > {
+    template < class... TFunctions >
+    struct CompositionFunction : public impl::FunctionBase< TFunctions... > {
+      public:
+        using return_type = typename impl::CompositionFunctionTraits< TFunctions... >::return_type;
+        using arg_list    = typename impl::CompositionFunctionTraits< TFunctions... >::argument_types;
+        using tuple_type  = std::tuple< std::decay_t< TFunctions >... >;
+
+#ifndef COMPOSITION_HELPER_DEBUG
       private:
-        using Base = impl::CompositionFunctionImpl< Closure, Signature >;
+#endif // COMPOSITION_HELPER_DEBUG
+
+        static constexpr auto no_except_property = impl::CompositionFunctionTraits< TFunctions... >::has_noexcept;
+        static constexpr auto const_property     = impl::CompositionFunctionTraits< TFunctions... >::has_const;
+
+        using Base = impl::FunctionBase< TFunctions... >;
 
       public:
-        using function_type = typename Base::ImplFunctionType;
-        using typename Base::return_type;
+        constexpr CompositionFunction(TFunctions... functions) : Base(std::forward_as_tuple< std::decay_t< TFunctions >... >(std::forward< TFunctions >(functions)...)) {
+        }
 
-        [[nodiscard]] constexpr CompositionFunction() requires(!std::is_class_v< function_type >) : Base(nullptr) {
+        template < class TFunction, class Enable = std::enable_if_t<
+                                        is_composable< typename impl::CompositionFunctionTraits< TFunctions... >::outer_function_t, std::decay_t< TFunction > >::value > >
+        constexpr auto Compose(TFunction function) const {
+            return impl::make_composition_func< TFunction >(Base::mFunctions, std::forward< TFunction >(function),
+                                                            std::make_index_sequence< std::tuple_size< tuple_type >::value > {});
         }
-        [[nodiscard]] constexpr CompositionFunction() requires(std::is_class_v< function_type >) : Base(function_type {}) {
-        }
-        [[nodiscard]] constexpr CompositionFunction(function_type&& func) : Base(std::move(func)) {
-        }
-        [[nodiscard]] constexpr CompositionFunction(const function_type& func) : Base(func) {
-        }
-        [[nodiscard]] constexpr CompositionFunction(const CompositionFunction&) = default;
-        [[nodiscard]] constexpr CompositionFunction(CompositionFunction&&)      = default;
-        [[nodiscard]] constexpr CompositionFunction& operator=(const CompositionFunction&) = default;
-        [[nodiscard]] constexpr CompositionFunction& operator=(CompositionFunction&&) = default;
-        constexpr ~CompositionFunction()                                              = default;
     };
 
     namespace impl {
-        template < class FirstCallable, class SecondCallable, class List, class... Args >
+        template < class FirstCallable, class SecondCallable, class... Args >
         struct Composer;
 
-        template < class FirstCallable, class SecondCallable, class RetType, template < class... > class List, class... Args >
-        struct Composer< FirstCallable, SecondCallable, RetType, List< Args... > > {
-            [[nodiscard]] constexpr static auto Compose(FirstCallable&& firstFunc, SecondCallable&& secondFunc) {
-                if constexpr (ConstTest< SecondCallable >::value && ConstTest< FirstCallable >::value) {
-                    auto composedFunction = [firstFunc_ = firstFunc, secondFunc_ = secondFunc](Args... args) constexpr noexcept(
-                                                noexcept(std::declval< SecondCallable >()(std::declval< FirstCallable >()(std::declval< Args >()...))))
-                                                ->RetType {
-                        return secondFunc_(firstFunc_(std::forward< Args >(args)...));
-                    };
-                    return CompositionFunction< RetType(Args...), decltype(composedFunction) >(std::move(composedFunction));
-                } else {
-                    auto composedFunction = [firstFunc_ = firstFunc, secondFunc_ = secondFunc](Args... args) constexpr mutable noexcept(
-                                                noexcept(std::declval< SecondCallable >()(std::declval< FirstCallable >()(std::declval< Args >()...))))
-                                                ->RetType {
-                        return secondFunc_(firstFunc_(std::forward< Args >(args)...));
-                    };
-                    return CompositionFunction< RetType(Args...), decltype(composedFunction) >(std::move(composedFunction));
-                }
+        template < class SecondCallable, class... Args >
+        struct Composer< CompositionFunction< Args... >, SecondCallable > {
+            [[nodiscard]] constexpr static auto Compose(CompositionFunction< Args... > firstFunc, SecondCallable secondFunc) {
+                return impl::make_composition_func< SecondCallable >(
+                    firstFunc.GetFunctions(), std::forward< SecondCallable >(secondFunc),
+                    std::make_index_sequence< std::tuple_size< typename CompositionFunction< Args... >::tuple_type >::value > {});
+            }
+        };
+
+        template < class FirstCallable, class... Args >
+        struct Composer< FirstCallable, CompositionFunction< Args... > > {
+            [[nodiscard]] constexpr static auto Compose(FirstCallable firstFunc, CompositionFunction< Args... > secondFunc) {
+                return impl::make_composition_func< FirstCallable >(
+                    secondFunc.GetFunctions(), std::forward< FirstCallable >(firstFunc),
+                    std::make_index_sequence< std::tuple_size< typename CompositionFunction< Args... >::tuple_type >::value > {});
+            }
+        };
+
+        template < class FirstCallable, class SecondCallable >
+        struct Composer< FirstCallable, SecondCallable > {
+            [[nodiscard]] constexpr static auto Compose(FirstCallable firstFunc, SecondCallable secondFunc) {
+                return fp::CompositionFunction { std::forward< FirstCallable >(firstFunc), std::forward< SecondCallable >(secondFunc) };
             }
         };
 
@@ -468,11 +416,10 @@ namespace fp {
     /// <summary>
     /// Composes two callables into one Compose(X, Y) -> Y(X(Args))
     /// </summary>
-    template < class FirstCallable, class SecondCallable, class RetType = typename functor_traits< std::decay_t< SecondCallable > >::return_type,
-               class ArgsList = typename functor_traits< std::decay_t< FirstCallable > >::argument_types >
-    [[nodiscard]] constexpr auto Compose(FirstCallable  firstFunc,
-                                         SecondCallable secondFunc) requires composable< std::decay_t< FirstCallable >, std::decay_t< SecondCallable > > {
-        return impl::Composer< FirstCallable, SecondCallable, RetType, ArgsList >::Compose(std::move(firstFunc), std::move(secondFunc));
+    template < class FirstCallable, class SecondCallable,
+               class Enable = std::enable_if_t< is_composable< std::decay_t< FirstCallable >, std::decay_t< SecondCallable > >::value > >
+    [[nodiscard]] constexpr auto Compose(FirstCallable firstFunc, SecondCallable secondFunc) {
+        return impl::Composer< FirstCallable, SecondCallable >::Compose(std::forward< FirstCallable >(firstFunc), std::forward< SecondCallable >(secondFunc));
     }
 
 } // namespace fp
