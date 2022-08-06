@@ -35,8 +35,8 @@
 *.bk
 
 # Visual studio files
-/out/
-/bin/
+*/out/
+*/bin/
 /.vs/
-/build/
-/install/
+*/build/
+*/install/
