@@ -1,13 +1,12 @@
-﻿// composition_helper.h
+// composition_function.hpp
 // This header contains a helper implementation to aid in function composition
-// while keeping noexcept and const specifiers whenever possible
 //
-// Created By: Michael Rizkalla
-// Date:		02/04/2021
+// Created By:  Michael Rizkalla
+// Date:        02/04/2021
 // Updated:     07/08/2022
 
-#ifndef COMPOSITION_HELPER_HPP
-#define COMPOSITION_HELPER_HPP
+#ifndef COMPOSITION_FUNCTION_HPP
+#define COMPOSITION_FUNCTION_HPP
 // Not using #pragma once since it's not a part of the standard
 #include <cstdint>
 #include <functional>
@@ -552,4 +551,4 @@ namespace mr {
 
 } // namespace mr
 
-#endif // COMPOSITION_HELPER_HPP
+#endif // COMPOSITION_FUNCTION_HPP
