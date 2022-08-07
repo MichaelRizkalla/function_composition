@@ -446,10 +446,10 @@ namespace utility {
         int objects_alive;
     };
     struct TrackedCallable {
-        constexpr TrackedCallable() noexcept : Alive(true) {
+        TrackedCallable() noexcept : Alive(true) {
             ++objects_alive;
         }
-        constexpr ~TrackedCallable() noexcept {
+        ~TrackedCallable() noexcept {
             if (Alive)
                 --objects_alive;
         }
