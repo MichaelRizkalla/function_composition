@@ -13,7 +13,13 @@ You can copy the header in your project, include and use it.
 auto add_one = [](int x) noexcept { return x + 1; };
 auto subtract_one = [](int x) noexcept { return x - 1; };
 
-auto identity = fp::CompositionFunction< decltype(add_one) >{ add_one }.Compose(subtract_one); // subtract_one(add_one(Args...))
+auto identity = mr::composition_function { add_one } | subtract_one; // subtract_one(add_one(Args...))
+/*
+Or 
+auto identity = mr::composition_function { add_one }.Compose(subtract_one);
+Or 
+auto identity = mr::compose | add_one | subtract_one;
+*/
 
 int value = 10;
 assert(identity(value) == value);
