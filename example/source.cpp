@@ -3,10 +3,10 @@
 #include <cassert>
 #include <composition_helper.hpp>
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <string_view>
 #include <vector>
-#include <functional>
 
 #define EXPECTED_RESULT(type, count_, ...)                     \
     auto results = std::array< type, count_ > { __VA_ARGS__ }; \
@@ -443,25 +443,42 @@ namespace utility {
         int moves;
         int assign_copies;
         int assign_moves;
+        int objects_alive;
     };
-    struct TrackedObject {
-        constexpr TrackedObject() noexcept = default;
-        TrackedObject(const TrackedObject&) noexcept {
+    struct TrackedCallable {
+        constexpr TrackedCallable() noexcept : Alive(true) {
+            ++objects_alive;
+        }
+        constexpr ~TrackedCallable() noexcept {
+            if (Alive)
+                --objects_alive;
+        }
+        TrackedCallable(const TrackedCallable& rhs) noexcept : Alive(rhs.Alive) {
+            if (Alive)
+                ++objects_alive;
             ++copies;
         }
-        TrackedObject(TrackedObject&&) noexcept {
+        TrackedCallable(TrackedCallable&& rhs) noexcept : Alive(std::exchange(rhs.Alive, false)) {
             ++moves;
         }
-        TrackedObject& operator=(const TrackedObject&) noexcept {
+        TrackedCallable& operator=(const TrackedCallable& rhs) noexcept {
+            Alive = rhs.Alive;
+            if (Alive)
+                ++objects_alive;
             ++assign_copies;
             return *this;
         }
-        TrackedObject& operator=(TrackedObject&&) noexcept {
+        TrackedCallable& operator=(TrackedCallable&& rhs) noexcept {
+            Alive = std::exchange(rhs.Alive, false);
             ++assign_moves;
             return *this;
         }
         Data operator()() const noexcept {
-            return { .copies = copies, .moves = moves, .assign_copies = assign_copies, .assign_moves = assign_moves };
+            return { .copies        = copies,
+                     .moves         = moves,
+                     .assign_copies = assign_copies,
+                     .assign_moves  = assign_moves,
+                     .objects_alive = objects_alive };
         }
 
         static void reset() noexcept {
@@ -471,44 +488,135 @@ namespace utility {
             assign_copies = 0;
         }
 
+        bool Alive = 0;
+
         inline static std::uint8_t moves         = 0;
         inline static std::uint8_t copies        = 0;
         inline static std::uint8_t assign_moves  = 0;
         inline static std::uint8_t assign_copies = 0;
+        inline static std::uint8_t objects_alive = 0;
     };
 } // namespace utility
 void test_construction() {
     auto passthrough = [](utility::Data x) noexcept { return std::forward< decltype(x) >(x); };
     {
-        utility::TrackedObject f {};
+        utility::TrackedCallable f {};
 
         auto function = mr::compose | std::move(f) /*move*/ | passthrough;
         static_assert(std::is_invocable_r_v< utility::Data, decltype(function) >);
         static_assert(std::is_nothrow_invocable_r_v< utility::Data, decltype(function) >);
-        assert(utility::TrackedObject::moves == 2);
-        assert(utility::TrackedObject::copies == 0);
+        assert(utility::TrackedCallable::objects_alive == 1);
+        assert(utility::TrackedCallable::moves == 2);
+        assert(utility::TrackedCallable::copies == 0);
+        assert(utility::TrackedCallable::assign_moves == 0);
+        assert(utility::TrackedCallable::assign_copies == 0);
 
         const auto data = function();
-        assert(utility::TrackedObject::moves == data.moves);
-        assert(utility::TrackedObject::copies == data.copies);
-        assert(utility::TrackedObject::moves == 2);
-        assert(utility::TrackedObject::copies == 0);
+        assert(utility::TrackedCallable::objects_alive == data.objects_alive);
+        assert(utility::TrackedCallable::moves == data.moves);
+        assert(utility::TrackedCallable::copies == data.copies);
+        assert(utility::TrackedCallable::objects_alive == 1);
+        assert(utility::TrackedCallable::moves == 2);
+        assert(utility::TrackedCallable::copies == 0);
+        assert(utility::TrackedCallable::assign_moves == 0);
+        assert(utility::TrackedCallable::assign_copies == 0);
     }
-    utility::TrackedObject::reset();
+    utility::TrackedCallable::reset();
     {
-        utility::TrackedObject f {};
-        auto                   function = mr::compose | f /*copy*/ | passthrough;
+        utility::TrackedCallable f {};
+        auto                     function = mr::compose | f /*copy*/ | passthrough;
         static_assert(std::is_nothrow_invocable_r_v< utility::Data, decltype(function) >);
-        assert(utility::TrackedObject::moves == 1);
-        assert(utility::TrackedObject::copies == 1);
+        const auto data = function();
+        assert(data.objects_alive == 2);
+        assert(data.moves == 1);
+        assert(data.copies == 1);
+        assert(data.assign_moves == 0);
+        assert(data.assign_copies == 0);
     }
-    utility::TrackedObject::reset();
+    utility::TrackedCallable::reset();
     {
-        auto function = mr::composition_function { utility::TrackedObject {}, passthrough };
+        utility::TrackedCallable f {};
+        auto                     function = mr::composition_function { f /*copy*/, passthrough };
         static_assert(std::is_nothrow_invocable_r_v< utility::Data, decltype(function) >);
-        assert(utility::TrackedObject::moves == 1);
-        assert(utility::TrackedObject::copies == 0);
+        const auto data = function();
+        assert(data.objects_alive == 2);
+        assert(data.moves == 0);
+        assert(data.copies == 1);
+        assert(data.assign_moves == 0);
+        assert(data.assign_copies == 0);
     }
+    utility::TrackedCallable::reset();
+    {
+        const utility::TrackedCallable f {};
+        auto                           function = mr::compose | f | passthrough;
+        static_assert(std::is_nothrow_invocable_r_v< utility::Data, decltype(function) >);
+        const auto data = function();
+        assert(data.objects_alive == 2);
+        assert(data.moves == 1);
+        assert(data.copies == 1);
+        assert(data.assign_moves == 0);
+        assert(data.assign_copies == 0);
+    }
+    utility::TrackedCallable::reset();
+    {
+        const utility::TrackedCallable f {};
+        auto                           function = mr::composition_function { f, passthrough };
+        static_assert(std::is_nothrow_invocable_r_v< utility::Data, decltype(function) >);
+        const auto data = function();
+        assert(data.objects_alive == 2);
+        assert(data.moves == 0);
+        assert(data.copies == 1);
+        assert(data.assign_moves == 0);
+        assert(data.assign_copies == 0);
+    }
+    utility::TrackedCallable::reset();
+    {
+        auto function = mr::composition_function { utility::TrackedCallable {}, passthrough };
+        static_assert(std::is_nothrow_invocable_r_v< utility::Data, decltype(function) >);
+        const auto data = function();
+        assert(data.objects_alive == 1);
+        assert(data.moves == 1);
+        assert(data.copies == 0);
+        assert(data.assign_moves == 0);
+        assert(data.assign_copies == 0);
+    }
+    utility::TrackedCallable::reset();
+    {
+        auto function = mr::compose | utility::TrackedCallable {} | passthrough;
+        static_assert(std::is_nothrow_invocable_r_v< utility::Data, decltype(function) >);
+        const auto data = function();
+        assert(data.objects_alive == 1);
+        assert(data.moves == 2);
+        assert(data.copies == 0);
+        assert(data.assign_moves == 0);
+        assert(data.assign_copies == 0);
+    }
+    utility::TrackedCallable::reset();
+    {
+        auto function =
+            mr::compose | static_cast< const utility::TrackedCallable&& >(utility::TrackedCallable {}) | passthrough;
+        static_assert(std::is_nothrow_invocable_r_v< utility::Data, decltype(function) >);
+        const auto data = function();
+        assert(data.objects_alive == 1);
+        assert(data.moves == 1);
+        assert(data.copies == 1);
+        assert(data.assign_moves == 0);
+        assert(data.assign_copies == 0);
+    }
+    utility::TrackedCallable::reset();
+    {
+        auto function =
+            mr::composition_function { static_cast< const utility::TrackedCallable&& >(utility::TrackedCallable {}),
+                                       passthrough };
+        static_assert(std::is_nothrow_invocable_r_v< utility::Data, decltype(function) >);
+        const auto data = function();
+        assert(data.objects_alive == 1);
+        assert(data.moves == 0);
+        assert(data.copies == 1);
+        assert(data.assign_moves == 0);
+        assert(data.assign_copies == 0);
+    }
+    utility::TrackedCallable::reset();
 }
 
 constexpr void test_1() {
@@ -523,13 +631,24 @@ constexpr void test_1() {
         return Args { str, options };
     };
     constexpr auto find_first =
+#ifndef __clang__
         [](Args args) constexpr noexcept(noexcept(std::ranges::search(args.str, args.options))) {
+#else  // __clang__
+        [](Args args) constexpr noexcept(
+            noexcept(std::search(args.str.begin(), args.str.end(), args.options.begin(), args.options.end()))) {
+#endif // !__clang__
         auto&& [str, options] = args;
         if (options.empty()) {
             return ""sv;
         }
+
+#ifndef __clang__
         auto result = std::ranges::search(str, options);
         return std::string_view { result.begin(), str.end() };
+#else  // __clang__
+        auto result = std::search(args.str.begin(), args.str.end(), args.options.begin(), args.options.end());
+        return std::string_view { result, str.end() };
+#endif // !__clang__
     };
     constexpr auto count_chars = [](std::string_view str) constexpr noexcept {
         return str.size();
@@ -561,13 +680,25 @@ void test_2() {
     constexpr auto str = "This is a test string, which will be searched for a specific sub string!"sv;
 
     std::function get_string = [str](std::string_view options) noexcept { return Args { str, options }; };
+
+#ifndef __clang__
     std::function find_first = [](Args args) noexcept(noexcept(std::ranges::search(args.str, args.options))) {
+#else  // __clang__
+    std::function find_first = [](Args args) noexcept(noexcept(std::search(args.str.begin(), args.str.end(),
+                                                                           args.options.begin(), args.options.end()))) {
+#endif // !__clang__
         auto&& [str, options] = args;
         if (options.empty()) {
             return ""sv;
         }
+
+#ifndef __clang__
         auto result = std::ranges::search(str, options);
         return std::string_view { result.begin(), str.end() };
+#else  // __clang__
+        auto result = std::search(args.str.begin(), args.str.end(), args.options.begin(), args.options.end());
+        return std::string_view { result, str.end() };
+#endif // !__clang__
     };
     std::function count_chars = [](std::string_view str) noexcept { return str.size(); };
 
