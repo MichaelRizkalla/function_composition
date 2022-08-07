@@ -1,7 +1,7 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
-#include <composition_helper.hpp>
+#include <composition_function.hpp>
 #include <cstdint>
 #include <functional>
 #include <limits>
