@@ -7,7 +7,7 @@ You can copy the header in your project, include and use it.
 
 # Use example
 ```C++
-#include <composition_helper.hpp>
+#include <composition_function.hpp>
 #include <cassert>
 
 auto add_one = [](int x) noexcept { return x + 1; };
